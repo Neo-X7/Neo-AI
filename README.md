@@ -1,151 +1,164 @@
-# Neo Data Manager v1.7 🗃️
 
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
+# Neo AI — v1.8
+ 
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-A privacy-first, offline CLI database management system built in Python. No cloud. No internet required. Your data stays on your machine.
-
+[![Ollama](https://img.shields.io/badge/powered%20by-Ollama-black)](https://ollama.com/)
+ 
+A fully offline personal AI assistant. Runs a local LLM, stores conversations in SQLite, and retrieves semantically relevant past context before every response. No cloud. No API keys. No data leaves your machine.
+ 
 ---
-
-## 📂 Project Structure
-
+ 
+## How It Works
+ 
 ```
-neo-data-manager/
-├── main.py            # 🟢 Entry point, menu loop
-├── RecordManager.py   # 🧠 Core logic, all DB operations
-├── storage.py         # 💾 SQLite connection, context manager
-├── operations.py      # ⚙️  Deletion logic with confirmation
-├── search.py          # 🔍 Combined search — ID, exact and partial username
-├── user_entry.py      # ⌨️  Registration and input handling
-├── user_interface.py  # 🎨 ID generation, timestamps, intro
-├── Validation.py      # ✅ Username validation rules
-├── logger.py          # 📋 Logging system with level filtering
-├── file_data.py       # 🛠️  System status checker
-└── neo_db.py          # 🧪 pytest test suite
+User prompt
+    │
+    ▼
+YAKE keyword extraction
+    │
+    ▼
+nomic-embed-text (Ollama) ──► LanceDB ANN search
+                                        │
+                                        ▼
+                              Match embedding IDs → SQLite JOIN
+                                        │
+                                        ▼
+                              Top 3 similar past conversations
+                                        │
+                ┌───────────────────────┘
+                ▼
+    Build context window:
+    [system prompt]
+    + [similar past exchanges]     ← semantic memory
+    + [last 5 conversations]       ← recent history
+    + [current prompt]
+                │
+                ▼
+        llama3.1 (Ollama) → response
+                │
+                ▼
+    Save to SQLite + embed keywords → LanceDB
 ```
-
+ 
+Two stores, one purpose:
+ 
+| Store | Role |
+|---|---|
+| SQLite (`ai_history.db`) | Source of truth — prompt, response, timestamp, keywords, vector reference ID |
+| LanceDB (`lance_store/`) | Vector store — embeddings keyed to SQLite rows, used for ANN search only |
+ 
 ---
-
-## 🚀 What's New in v1.7
-
-### Code Quality
-- **Type Hints:** Full type annotations across all files — function parameters, return types, and imported types via `TYPE_CHECKING` to avoid circular imports.
-- **pytest Suite:** 11 automated tests covering validation, insert, delete, search, and edge cases. Run with `pytest neo_db.py`.
-- **Schema Hardening:** Added `NOT NULL` and `UNIQUE` constraints to the SQLite schema. Database rejects incomplete or duplicate data at the storage level, not just the application level.
-
-### Features
-- **Combined Search:** Single input searches by ID first, then exact username, then partial username match — automatically, in one flow. No more choosing search mode manually.
-- **Rich Terminal Formatting:** All output now uses the `rich` library — bordered tables for records, colored panels for user details, color-coded log entries, and styled error/success messages.
-- **Log Level Filtering:** Log menu now supports filtering by INFO, WARNING, ERROR, and CRITICAL separately, in addition to today and all-logs views.
-- **System Status:** Menu option 5 replaced the old debug dump with a clean status table showing database path, total record count, and log file status.
-
-### Bug Fixes
-- Fixed `log_his()` crash — `lines` variable referenced instead of `line` in the loop, causing `AttributeError` on every log view
-- Fixed `display_data()` — table rendered before empty check, now shows "No records found" correctly
-- Fixed log message — "Record not displayed and found" replaced with accurate message and correct log level
-- Removed leftover `test_record_insertions` method that was incorrectly placed inside `RecordManager` class
-
-### UX Fixes
-- Menu labels rewritten — "Enter Details (For First Time Data Entry)" → "Register New User"
-- Intro screen cleaned — removed raw file path, replaced with styled privacy-first tagline
-- Validation error messages now styled in red via rich
-- `user_entry.py` typos fixed — "stores" → "stored", "Usermane" → "Username"
-- Minimum username length increased from 3 to 5 characters
-- All error and success messages consistently styled across the codebase
-
-## 📸 Gallery
-
-### Demo
-![Neo Demo](demo.gif/neo_data_manager_work.gif)
-
-### System Status
-![Neo Demo](demo.gif/neo_system_status.gif)
-
-### Menu
-![Menu](screenshots/menu.png)
-
-### Search
-![Search](screenshots/search.png)
-
-### System Status
-![Status](screenshots/system_status.png)
-
-### Registration
-![Registration](screenshots/registration.png)
-
+ 
+## Project Structure
+ 
+```
+neo-AI/
+├── main.py            # Entry point, command loop, Ollama auto-start
+├── neo.py             # Chat loop, memory delete
+├── neo_ollama.py      # Ollama LLM chat + embedding calls
+├── storage.py         # SQLite ops, YAKE keyword extraction, retrieval
+├── lancedb_store.py   # LanceDB insert, ANN search, clear
+├── config.py          # First-run username setup, base64 persistence
+├── logger.py          # Dual logger (system + memory), log viewer CLI
+└── file_data.py       # System status checker
+```
+ 
 ---
-
-## ✨ Features
-
-- **Fully Offline** — zero internet dependency, zero cloud
-- **SQLite Storage** — reliable, structured, corruption-resistant
-- **Atomic Transactions** — automatic rollback on failure, SQLite-guaranteed
-- **Unique ID Generation** — 10-character hex ID per record via `uuid`
-- **Combined Search** — one input searches ID, exact username, and partial username automatically
-- **Validation** — strict username rules enforced before any record is created
-- **Rich Display** — color-coded tables, panels, and messages throughout
-- **Logging** — every action logged with timestamp and level, filterable from CLI
-
+ 
+## Database Schema
+ 
+```sql
+CREATE TABLE ai_history (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    prompt              TEXT NOT NULL,
+    response            TEXT NOT NULL,
+    timestamp           TEXT NOT NULL,
+    compressed_keywords TEXT,
+    embeddings_id       TEXT
+);
+```
+ 
+`embeddings_id` is a UUID4 that maps to the corresponding vector row in LanceDB.
+ 
 ---
-
-## 🛠️ Core Functions
-
-| Function | File | Description |
-|---|---|---|
-| `name_enter()` | user_entry.py | Register new user with validation |
-| `combined_search()` | search.py | Search by ID, exact or partial username in one flow |
-| `delete_data()` | operations.py | Delete all records with confirmation |
-| `delete_person()` | operations.py | Delete single user with confirmation |
-| `get_db()` | storage.py | Context manager — handles connect, commit, rollback, close |
-| `update_record()` | RecordManager.py | Insert a record, rejects duplicates |
-| `display_data()` | RecordManager.py | Display all records as rich table |
-| `display_user()` | RecordManager.py | Display single user as rich panel |
-| `log_menu()` | logger.py | View and filter logs from CLI |
-| `verify()` | file_data.py | System status — DB, records count, log file |
-
----
-
-## ⚠️ Known Limitations
-
-- **Single user only** — no concurrent access support
-- **No multi-field search** — search by username or ID only
-
----
-
-## 🛠️ Installation
-
+ 
+## Setup
+ 
+**Requirements:** Python 3.10+, [Ollama](https://ollama.com/) installed
+ 
 ```bash
-git clone https://github.com/Neo-Aizen07/neo-data-manager.git
-cd neo-data-manager
-pip install rich
+git clone https://github.com/Neo-X7/neo-AI.git
+cd neo-AI
+pip install ollama lancedb pyarrow yake rich httpx
+```
+ 
+Pull required models:
+ 
+```bash
+ollama pull llama3.1
+ollama pull nomic-embed-text
+```
+ 
+Run:
+ 
+```bash
 python main.py
 ```
-
-**Run tests:**
-```bash
-pytest neo_db.py
+ 
+Neo will attempt to start the Ollama server automatically if it isn't already running.
+ 
+---
+ 
+## Commands
+ 
+**Main menu:**
+ 
 ```
-
-Python 3.8+ required.
-
+/chat      start a conversation
+/delete    wipe all memory (SQLite + LanceDB)
+/status    system status
+/logs      open log viewer
+/help      show commands
+/quit      exit
+```
+ 
+**Inside `/chat`:**
+ 
+```
+/exit      return to main menu
+```
+ 
+**Inside `/logs`:**
+ 
+```
+/all       system logs
+/ai        memory event logs
+/clear     wipe system logs
+/back      return to main menu
+```
+ 
 ---
-
-## 📈 Version History
-
-| Version | Highlights |
+ 
+## Version History
+ 
+| Version | Changes |
 |---|---|
-| v1.0 | Initial release, basic CRUD |
-| v1.1 | Fixed logic errors, improved JSON serialization, UUID generation |
-| v1.2 | Username indexing, UI processing effects |
-| v1.3 | Validation fixes, keyboard QR close, separate delete operations |
-| v1.4 | Data persistence fix, atomic saves, file verification, case-insensitive search |
-| v1.5 | Duplicate username fix, partial search, standard logging, mutable state overhaul |
-| v1.6 | Full SQLite migration, context manager pattern, dict layer removed, atomic transactions |
-| v1.7 | Type hints, pytest suite, combined search, rich formatting, log level filtering, schema hardening, UX fixes |
-
+| v1.0 | Initial release, basic CRUD, JSON storage |
+| v1.1 | Logic fixes, UUID generation, JSON serialization |
+| v1.2 | Username indexing, UI effects |
+| v1.3 | Validation fixes, separate delete operations |
+| v1.4 | Atomic saves, file verification, case-insensitive search |
+| v1.5 | Duplicate fix, partial search, standard logging |
+| v1.6 | Full SQLite migration, context manager pattern |
+| v1.7 | Type hints, pytest suite, rich formatting, schema hardening |
+| v1.8 | Local LLM via Ollama, LanceDB vector store, semantic memory retrieval, keyword extraction, WAL mode, config persistence |
+ 
 ---
-
-## 💡 Notes
-
-- Built and debugged manually
-- Contributions and feedback welcome
+ 
+## Roadmap
+ 
+| Version | Planned |
+|---|---|
+| v1.9 | CLI commands (`/ask`, `/forget`, `/status`), entity extraction column, privacy search (DuckDuckGo, SearXNG) |
+| v2.0 | Final public release — repo goes private after release |

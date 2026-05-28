@@ -1,12 +1,19 @@
 import sqlite3
+from datetime import datetime
+import yake
+import uuid
 from typing import Generator
 from contextlib import contextmanager
+import os
+_BASE_DIR=os.path.dirname(os.path.abspath(__file__))
+_DB_PATH=os.path.join(_BASE_DIR,"ai_history.db")
 def connect_db()->sqlite3.Connection:
-    conn=sqlite3.connect("neo_data.db")
+    conn=sqlite3.connect(_DB_PATH)
     conn.row_factory=sqlite3.Row
     return conn
 def initialise_db(conn : sqlite3.Connection)->None:
-    conn.execute("""create table if not exists records(username text primary key not null, id text unique not null , last_saved text not null)""")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("""create table if not exists ai_history(id integer primary key autoincrement, prompt text not null, response text not null,timestamp not null,compressed_keywords text, embeddings_id text)""")
     conn.commit()
 @contextmanager
 def get_db()-> Generator[sqlite3.Connection, None, None]:
@@ -17,5 +24,44 @@ def get_db()-> Generator[sqlite3.Connection, None, None]:
     except Exception as e:
         conn.rollback()
         raise e
+    finally:
+        conn.close()
+def extract_keywords(text):
+    kw_extractor = yake.KeywordExtractor(lan="en", n=2, top=10)
+    keywords = kw_extractor.extract_keywords(text)
+    return ", ".join([kw for kw, score in keywords])
+def save_message(conn, prompt, response):
+    from lancedb_store import insert_vector
+    from neo_ollama import get_embedding
+    timestamp = datetime.now().isoformat()
+    embedding_id=str(uuid.uuid4())
+    compressed_keywords = extract_keywords(prompt + " " + response)
+    conn.execute("""INSERT INTO ai_history (prompt, response, timestamp, compressed_keywords,embeddings_id) VALUES (?, ?, ?, ?,?)""", (prompt, response, timestamp, compressed_keywords,embedding_id))
+    conn.commit()
+    try:
+        vector=get_embedding(compressed_keywords)
+        insert_vector(embedding_id,vector)
+    except Exception as e:
+        from logger import ai_log_info
+        ai_log_info(f"Embedding failed for {embedding_id}:{e}",level="WARNING",module="MEMORY")
+        pass
+def retrieve_similar(query_keywords:str)->list:
+    from lancedb_store import search_similarity
+    from neo_ollama import get_embedding
+    query_vector=get_embedding(query_keywords)
+    embedding_ids=search_similarity(query_vector)
+    if not embedding_ids:
+        return []
+    embedding_ids=search_similarity(query_vector)
+    import re
+    uuid_pattern=re.compile(r'^[0-9a-f-]{36}$')
+    embedding_ids=[e for e in embedding_ids if uuid_pattern.match(e)]
+    if not embedding_ids:
+        return []
+    placeholders=",".join("?"*len(embedding_ids))
+    conn=connect_db()
+    try:
+        rows=conn.execute(f"""SELECT prompt, response FROM ai_history WHERE embeddings_id IN ({placeholders}) ORDER BY timestamp DESC""",embedding_ids).fetchall()
+        return [dict(row) for row in rows]
     finally:
         conn.close()
