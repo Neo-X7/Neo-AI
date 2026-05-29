@@ -65,6 +65,23 @@ neo-AI/
 ```
  
 ---
+## Screenshots and Demos
+
+### Demos
+![Neo AI Main Demo](demo.gif/neo_ai_demo.gif)
+![Neo AI Retrieval Demo](demo.gif/neo_ai_retrieval.gif)
+
+### Chat
+![Chat](screenshots/chat.png)
+
+### System Status
+![Status](screenshots/status.png)
+
+### Logs
+![Logs](screenshots/logs.png)
+
+### Memory Delete
+![Delete](screenshots/delete.png)
  
 ## Database Schema
  

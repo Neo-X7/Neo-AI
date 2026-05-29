@@ -24,7 +24,7 @@ HELP_TEXT = """
   [cyan]/status[/cyan]   system status
   [cyan]/logs[/cyan]     open log viewer
   [cyan]/help[/cyan]     show this message
-  [cyan]/quit[/cyan]     exit
+  [cyan]/exit[/cyan]     exit
 """
 def main():
     start_ollama()
@@ -52,7 +52,7 @@ def main():
                 log_menu()
             elif cmd == "/help":
                 console.print(HELP_TEXT)
-            elif cmd == "/quit":
+            elif cmd == "/exit":
                 log_info("Program exited", level="INFO", module="MAIN")
                 sys.exit()
             else:
