@@ -137,7 +137,7 @@ Neo will attempt to start the Ollama server automatically if it isn't already ru
 /status    system status
 /logs      open log viewer
 /help      show commands
-/quit      exit
+/exit      exit from neo
 ```
  
 **Inside `/chat`:**
