@@ -3,6 +3,24 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Neo runtime data
+config.json
+ai_history.db
+lance_store/
+
+# Logs
+error.log
+ai_memory.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.env
 # Neo Data Manager
 neo_data.db
 error.log
