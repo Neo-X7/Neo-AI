@@ -6,16 +6,24 @@ from rich.console import Console
 from rich.text import Text
 import subprocess
 import time
-def start_ollama():
+def is_ollama_running():
+    import httpx
     try:
-        import httpx
-        httpx.get("http://localhost:11434")
-        return
+        httpx.get("http://localhost:11434", timeout=2)
+        return True
     except Exception:
-        console.print(Text("Starting OLlama server...",style="dim"))
-        subprocess.Popen(["ollama","serve"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-        time.sleep(2)
-        console.print(Text("Ollama server started.", style="dim"))
+        return False
+def start_ollama():
+    if is_ollama_running():
+        return
+    console.print(Text("Starting Ollama server...", style="dim"))
+    subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for _ in range(10):
+        time.sleep(1)
+        if is_ollama_running():
+            console.print(Text("Ollama server started.", style="dim"))
+            return
+    raise RuntimeError("Ollama failed to start after 10 seconds.")
 console = Console()
 HELP_TEXT = """
 [bold cyan]Neo AI[/bold cyan] — available commands:

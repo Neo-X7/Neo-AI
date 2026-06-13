@@ -1,10 +1,6 @@
-
-from logger import log_info
 from storage import connect_db,initialise_db,get_db
-from logger import ai_log_info
+from logger import ai_log_info,log_info
 from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
 from rich.text import Text
 console=Console()
 def initialise():
@@ -27,26 +23,38 @@ def ask_neo()->None:
         prompt = input(f" {username}>").strip()
         if not prompt:
             console.print(Text("Prompt cannot be empty.",style="bold red"))
+            ai_log_info("Prompt was empty", level="WARNING",module="AI")
             continue
         if len(prompt)>2000:
             console.print(Text("Prompt too long. Keep it under 2000 characters.",style="bold red"))
+            ai_log_info("Prompt Length exceeded above 2000 characters", level="WARNING",module="AI")
             continue
         if prompt=="/exit":
             break
         else:
-            compressed = extract_keywords(prompt)
-            similar=retrieve_similar(compressed)
-            response = chat(username, prompt,history,similar)
-            with get_db() as conn:
-                save_message(conn,prompt,response)
-            console.print(Text(response, style="cyan"))
+            try:
+                compressed = extract_keywords(prompt)
+                similar=retrieve_similar(compressed) if compressed else []
+                response = chat(username, prompt,history,similar)
+                with get_db() as conn:
+                    save_message(conn,prompt,response)
+                console.print(Text(response, style="cyan"))
+            except Exception as e:
+                print("An Error occured while compression and memory storage")
+                ai_log_info(f" ERROR : {e}", level="ERROR",module="MEMORY")
 def delete_memory():
     try:
         confirm = input("Delete all AI memory? (yes/no): ").strip().lower()
-        if confirm != "yes":
+        if confirm == "no":
             console.print(Text("Cancelled", style="yellow"))
-            if confirm != "no":
-                ai_log_info("User entered Invalid Input", level="INFO", module="AI")
+            ai_log_info("User entered no ", level="INFO", module="AI")
+            return
+        elif confirm == "yes":
+            console.print(Text("Command Accepted",style="green"))
+            ai_log_info("User entered yes", level="INFO", module="AI")
+        else:
+            console.print(Text("Invalid Command",style="bold red"))
+            ai_log_info("User entered Invalid Input", level="INFO", module="AI")
             return
         with get_db() as conn:
             count = conn.execute("SELECT COUNT(*) FROM ai_history").fetchone()[0]
@@ -58,9 +66,10 @@ def delete_memory():
             from lancedb_store import clear_all_vectors
             clear_all_vectors()
             console.print(Text("Memory cleared successfully", style="green"))
-            ai_log_info("All AI memory deleted by user", level="WARNING", module="AI")
+            ai_log_info("All AI memory deleted by user", level="INFO", module="AI")
         elif input_1 == "no":
             console.print(Text("Cancelled", style="yellow"))
+            ai_log_info("User cancelled the deletion process",level="INFO",module="AI")
         else:
             console.print(Text("Invalid Input", style="bold red"))
     except Exception as e:

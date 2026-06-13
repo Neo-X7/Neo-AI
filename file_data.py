@@ -9,6 +9,7 @@ def verify() -> None:
     try:
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         db_path = os.path.join(BASE_DIR, "ai_history.db")
+        error_db_path=os.path.join(BASE_DIR,"error.log")
         log_path = os.path.join(BASE_DIR, "ai_memory.log")
         with get_db() as conn:
             count = conn.execute("SELECT COUNT(*) FROM ai_history").fetchone()[0]
@@ -18,7 +19,8 @@ def verify() -> None:
         table.add_column("Details", style="white")
         table.add_row("Database","✓ Found" if os.path.exists(db_path) else "✗ Missing", db_path)
         table.add_row("AI Chats",str(count),"chats in database")
-        table.add_row("Log File","✓ Found" if os.path.exists(log_path) else "✗ Missing",log_path)
+        table.add_row(" AI Log File","✓ Found" if os.path.exists(log_path) else "✗ Missing",log_path)
+        table.add_row("Error Log","✓ Found" if os.path.exists(error_db_path) else "✗ Missing",error_db_path)
         console.print(table)
         log_info("System status checked", level="INFO",module="VERIFY")
     except Exception as e:
