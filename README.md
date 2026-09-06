@@ -1,10 +1,12 @@
 # Neo AI — v1.9
 
+**Co-engineered with Claude (Anthropic) — debugging, architecture review, and documentation.**
+
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ollama](https://img.shields.io/badge/powered%20by-Ollama-black)](https://ollama.com/)
 
-Every time you close ChatGPT, it forgets you. Neo is built to fix that — locally, permanently, privately. No cloud. No API keys. No data leaves your machine.
+A personal project to see how far a fully local AI assistant could go — real memory that persists across sessions, a safety gate that catches bad or implausible facts before they're stored, and live web search that's isolated from that memory so it can't quietly corrupt what Neo believes about you. It is local, permanent, private. No cloud. No API keys. No data leaves your machine.
 
 > **Disclaimer:** Neo runs a local LLM. Like all language models, it can make mistakes, hallucinate, or produce incorrect information. Do not rely on it for critical decisions.
 
@@ -27,6 +29,7 @@ Full details in [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md). Short version:
 - **LLM-based fact fallback is disabled.** If a fact isn't stated in a directly parseable grammatical form, Neo may not catch it. This was a deliberate call — the fallback was found to fabricate facts (wrong ages, invented locations) often enough that "sometimes misses a fact" was safer than "sometimes invents one."
 - **No model-tier fallback.** Neo targets `llama3.1:8b` only. On hardware that can't run an 8B model, Neo will fail to start rather than silently degrading to a smaller, less reliable model.
 - **Location extraction can drop secondary detail** — "I live in Bengaluru, India" may store just `Bengaluru`.
+- **Search-completion grounding — fixed and verified.** An earlier version of the system prompt allowed the model to fabricate an answer disconnected from the actual search results in at least one confirmed case. The prompt was rewritten to explicitly forbid using prior knowledge and require the model to point to a specific supporting result before answering. Verified against three cases: relevant results present, zero results, and irrelevant results present.
 - A couple of narrow query-understanding edge cases (self-referential phrasing that also names another person; time-sensitivity detection on in-progress sports/event standings). Neither affects the common path.
 
 ---
@@ -91,7 +94,6 @@ neo-AI/
 ├── hardware_check.py     # VRAM/RAM budget, context window sizing
 ├── config.py             # Username + override persistence
 ├── model_config.py       # Shared embedding model loading
-├── server.py             # FastAPI HTTP interface
 ├── logger.py             # Dual logger (system + memory), log viewer CLI
 └── tests/                # Real regression tests
 ```
@@ -139,9 +141,9 @@ Numbers will vary with your hardware and context window budget — see the conte
 **Requirements:** Python 3.12+, [Ollama](https://ollama.com/), [Docker](https://www.docker.com/) (for local SearXNG)
 
 ```bash
-git clone https://github.com/Neo-X7/neo-AI.git
-cd neo-AI
-pip install -r requirements.txt
+git clone https://github.com/Neo-X7/Neo-AI.git
+cd Neo-AI
+pip install -r requirement.txt
 ```
 
 Pull the required model:
@@ -207,7 +209,7 @@ Neo will attempt to start the Ollama server and a local SearXNG container automa
 | v1.0 – v1.7 | Initial CLI build, JSON → SQLite migration, logging, pytest suite |
 | v1.8 | Local LLM via Ollama, LanceDB vector store, semantic memory retrieval |
 | v1.8.5 | Bug fixes across logging, delete logic, embedding guards |
-| **v1.9** | Structured versioned entity memory, `write_gate` plausibility/contradiction checks, live web search with isolated grounding, hardware-aware context sizing, real regression test suite, retrieval eval + latency benchmarks |
+| **v1.9** | Structured versioned entity memory, `write_gate` plausibility/contradiction checks, live web search with isolated grounding and a fixed/verified fabrication bug, hardware-aware context sizing, real regression test suite, retrieval eval + latency benchmarks |
 
 ---
 
