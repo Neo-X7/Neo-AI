@@ -1,0 +1,6 @@
+yake>=0.4.8
+spacy>=3.7
+lancedb>=0.13
+ollama>=0.3
+rich>=13.7
+sentence-transformers>=3.0
