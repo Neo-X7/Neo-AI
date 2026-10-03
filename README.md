@@ -1,41 +1,45 @@
+
+
+Readme · MD
 # Neo AI — v1.9
-
-**Co-engineered with Claude (Anthropic) — debugging, architecture review, and documentation.**
-
+ 
+**Authorship:** v1.0 – v1.8 written by me. Most of v1.9's code was written with Claude (Anthropic), which also helped with debugging, architecture review, and documentation.
+ 
 [![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ollama](https://img.shields.io/badge/powered%20by-Ollama-black)](https://ollama.com/)
-
+ 
 A personal project to see how far a fully local AI assistant could go — real memory that persists across sessions, a safety gate that catches bad or implausible facts before they're stored, and live web search that's isolated from that memory so it can't quietly corrupt what Neo believes about you. It is local, permanent, private. No cloud. No API keys. No data leaves your machine.
-
+ 
 > **Disclaimer:** Neo runs a local LLM. Like all language models, it can make mistakes, hallucinate, or produce incorrect information. Do not rely on it for critical decisions.
-
+ 
 ---
-
+ 
 ## What's new in v1.9
-
+ 
 - **Structured entity memory.** Facts about you (location, age, workplace, etc.) are stored as versioned rows, not a JSON blob — every change is kept as history, nothing is silently overwritten.
 - **`write_gate`.** Before any fact is written, it passes through a gazetteer check (is a claimed place real?), an LLM plausibility check, and a contradiction check (does it conflict with what's already stored?) before it's allowed into memory.
 - **Live web search**, backed by a local SearXNG instance (or Brave/Tavily if you bring an API key), fully isolated from the memory/fact pipeline — search-triggered answers never touch `write_gate` or get written to long-term memory as chat history.
 - **Hardware-aware context sizing** — Neo estimates a safe context window from your available VRAM/RAM and warns (without crashing) if it's constrained.
 - **A real test suite** (`tests/test_fixes.py`) covering regressions that were actually found and fixed during development, not just happy-path smoke tests.
-
 ---
-
+ 
 ## Known Issues
-
+ 
 Full details in [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md). Short version:
-
+ 
+- **No relevance cutoff in retrieval.** Neo always returns the top 4 results, even for unrelated queries like "what's 2 plus 2". In my eval, all 8 negative-control queries returned results, so Neo relies on the LLM to ignore irrelevant context. A similarity threshold is the likely fix, but I haven't picked or tested a value.
+- **First-person detection misfires on questions.** `_FIRST_PERSON_RE` also matches questions containing "my" (e.g. "what is my sister's name?"), so a question can be treated like a statement. The fix should be to classify statement vs. question first, then check for first person, not a patched regex.
+- **Contradiction threshold is untuned.** The `write_gate` contradiction check uses a fixed cosine cutoff of 0.8. High cosine similarity means "similar", not "contradictory" (for example, "I live in Pune" and "I live in Delhi" score high), so this check is approximate.
 - **LLM-based fact fallback is disabled.** If a fact isn't stated in a directly parseable grammatical form, Neo may not catch it. This was a deliberate call — the fallback was found to fabricate facts (wrong ages, invented locations) often enough that "sometimes misses a fact" was safer than "sometimes invents one."
 - **No model-tier fallback.** Neo targets `llama3.1:8b` only. On hardware that can't run an 8B model, Neo will fail to start rather than silently degrading to a smaller, less reliable model.
 - **Location extraction can drop secondary detail** — "I live in Bengaluru, India" may store just `Bengaluru`.
 - **Search-completion grounding — fixed and verified.** An earlier version of the system prompt allowed the model to fabricate an answer disconnected from the actual search results in at least one confirmed case. The prompt was rewritten to explicitly forbid using prior knowledge and require the model to point to a specific supporting result before answering. Verified against three cases: relevant results present, zero results, and irrelevant results present.
 - A couple of narrow query-understanding edge cases (self-referential phrasing that also names another person; time-sensitivity detection on in-progress sports/event standings). Neither affects the common path.
-
 ---
-
+ 
 ## Architecture
-
+ 
 ```mermaid
 flowchart TD
     A[User query] --> B{Search-triggered?}
@@ -43,7 +47,7 @@ flowchart TD
     S1 --> S2[web_search_multi - SearXNG]
     S2 --> S3[search_completion - isolated, no memory write]
     S3 --> Z[Response]
-
+ 
     B -- no --> C[extraction.py - spaCy + YAKE]
     C --> D[SQL entity hits]
     C --> E[LanceDB entity vectors]
@@ -53,7 +57,7 @@ flowchart TD
     F --> G
     G --> H[chat - facts block + retrieved context]
     H --> Z
-
+ 
     H --> I[write_gate]
     I --> I1[Gazetteer check]
     I --> I2[LLM plausibility check]
@@ -62,19 +66,19 @@ flowchart TD
     I2 --> J
     I3 --> J
 ```
-
+ 
 Two stores, one purpose:
-
+ 
 | Store | Role |
 |---|---|
 | SQLite (`ai_history.db`) | Source of truth — conversation history, entity facts, semantic summaries |
 | LanceDB (`lance_store/`) | Vector store — embeddings keyed to SQLite rows, used for ANN search only |
 | SQLite (`neo_web.db`) | Cached web search results, kept separate from personal memory |
-
+ 
 ---
-
+ 
 ## Project Structure
-
+ 
 ```
 neo-AI/
 ├── main.py               # Entry point, command loop, Ollama/SearXNG auto-start
@@ -97,77 +101,79 @@ neo-AI/
 ├── logger.py             # Dual logger (system + memory), log viewer CLI
 └── tests/                # Real regression tests
 ```
-
+ 
 ---
-
+ 
 ## Benchmarks
-
+ 
 Measured locally on a 6GB VRAM/RAM budget, `llama3.1:8b`:
-
+ 
 | Operation | Time |
 |---|---|
 | Live web search (`search_and_learn`) | ~1.5s |
 | Plain memory-lookup chat turn | ~1.1s |
 | Search-grounded chat turn | ~2.4s |
-
-Retrieval quality (`eval_retrieval.py`, seeded fixture set): **Recall@4 = 0.94, MRR = 0.88**.
-
+ 
+Retrieval quality (`eval_retrieval.py`): **Recall@4 = 0.94, MRR = 0.88**.
+ 
+How much to trust these numbers: the eval is small and optimistic. It uses 16 hand-written queries over synthetic fixture data (8 more negative-control queries are not scored), and I tuned the fusion weights on this same set. One query misses ("what country am I in"). Treat the result as a sanity check, not a general benchmark.
+ 
 Numbers will vary with your hardware and context window budget — see the context-window warning in `/status` if you're on constrained hardware.
-
+ 
 ---
-
+ 
 ## Screenshots and Demos
-
+ 
 ### Demos
 ![Onboarding and memory](demo.gif/neo_ai_retrieval.gif)
 ![Recall and search](demo.gif/neo_ai_retrieved_data.gif)
-
+ 
 ### Chat
 ![Chat](screenshots/chat.png)
-
+ 
 ### System Status
 ![Status](screenshots/status.png)
-
+ 
 ### Logs
 ![Logs](screenshots/logs.png)
-
+ 
 ### Memory Delete
 ![Delete](screenshots/delete.png)
-
+ 
 ---
-
+ 
 ## Setup
-
+ 
 **Requirements:** Python 3.12+, [Ollama](https://ollama.com/), [Docker](https://www.docker.com/) (for local SearXNG)
-
+ 
 ```bash
 git clone https://github.com/Neo-X7/Neo-AI.git
 cd Neo-AI
 pip install -r requirement.txt
 ```
-
+ 
 Pull the required model:
-
+ 
 ```bash
 ollama pull llama3.1:8b
 ```
-
+ 
 Neo uses a local sentence-transformer (`all-mpnet-base-v2`) for embeddings, not an Ollama model — on first run it will ask for the model's local path (or set `NEO_EMBED_MODEL_PATH`).
-
+ 
 Run:
-
+ 
 ```bash
 python main.py
 ```
-
+ 
 Neo will attempt to start the Ollama server and a local SearXNG container automatically if they aren't already running.
-
+ 
 ---
-
+ 
 ## Commands
-
+ 
 **Main menu:**
-
+ 
 ```
 /chat                       start a conversation
 /delete                     wipe all memory (SQLite + LanceDB)
@@ -183,15 +189,15 @@ Neo will attempt to start the Ollama server and a local SearXNG container automa
 /help                       show commands
 /exit                       exit
 ```
-
+ 
 **Inside `/chat`:**
-
+ 
 ```
 /exit      return to main menu
 ```
-
+ 
 **Inside `/logs`:**
-
+ 
 ```
 /all [error|warning]   system logs
 /ai [error|warning]    memory event logs
@@ -199,20 +205,22 @@ Neo will attempt to start the Ollama server and a local SearXNG container automa
 /clear-ai              wipe memory event logs
 /exit                  return to main menu
 ```
-
+ 
 ---
-
+ 
 ## Version History
-
+ 
 | Version | Changes |
 |---|---|
 | v1.0 – v1.7 | Initial CLI build, JSON → SQLite migration, logging, pytest suite |
 | v1.8 | Local LLM via Ollama, LanceDB vector store, semantic memory retrieval |
 | v1.8.5 | Bug fixes across logging, delete logic, embedding guards |
 | **v1.9** | Structured versioned entity memory, `write_gate` plausibility/contradiction checks, live web search with isolated grounding and a fixed/verified fabrication bug, hardware-aware context sizing, real regression test suite, retrieval eval + latency benchmarks |
-
+ 
 ---
-
+ 
 ## Project Status
-
+ 
 v1.9 is the final release. A v2.0 (packaged install, hardened public API) was planned but has been shelved — Neo's architecture assumes a machine that can comfortably run `llama3.1:8b` locally (see the [Known Issues](#known-issues) note on no model-tier fallback), which isn't a realistic baseline to package for general public hardware. Turning this into a distributable product would mean either reintroducing a reliable smaller-model fallback (the earlier `phi3`-based one was dropped for being unreliable, not for being unnecessary) or accepting a much narrower hardware target than a "download and run" release implies. Neither was pursued further — this project is being kept at its current state as a working local-AI-memory system, not developed toward a packaged product.
+ 
+
