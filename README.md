@@ -221,10 +221,12 @@ Neo starts the Ollama server automatically if it isn't running. Run the tests fr
 **Inside `/logs`:**
 
 ```
-/all       system logs (error.log)
-/ai        memory event logs (ai_memory.log)
-/clear     wipe system logs
-/exit      return to main menu
+/all [error|warning]   system logs
+/ai [error|warning]    memory event logs
+/clear                 wipe system logs
+/clear-ai              wipe memory event logs
+/help                  show the menu
+/exit                  return to main menu
 ```
 
 ---
