@@ -7,6 +7,7 @@ from rich.text import Text
 import subprocess
 import time
 def is_ollama_running():
+    """Return True if the Ollama server answers on localhost:11434."""
     import httpx
     try:
         httpx.get("http://localhost:11434", timeout=2)
@@ -14,6 +15,7 @@ def is_ollama_running():
     except Exception:
         return False
 def start_ollama():
+    """Start 'ollama serve' if it is not running and wait up to 10 seconds. Raises RuntimeError if it does not come up."""
     if is_ollama_running():
         return
     console.print(Text("Starting Ollama server...", style="dim"))
@@ -33,8 +35,13 @@ HELP_TEXT = """
   [cyan]/logs[/cyan]     open log viewer
   [cyan]/help[/cyan]     show this message
   [cyan]/exit[/cyan]     exit
+
+Inside [cyan]/chat[/cyan]:
+  [cyan]/search <query>[/cyan]   force a web search (Neo also searches on its own when needed)
+  [cyan]/exit[/cyan]             return to the main menu
 """
 def main():
+    """Main menu loop: /chat, /delete, /status, /logs, /help, /exit."""
     start_ollama()
     initialise()
     from config import get_user

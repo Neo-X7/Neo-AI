@@ -6,6 +6,7 @@ from logger import log_info
 from storage import get_db
 console = Console()
 def verify() -> None:
+    """Print a status table: database file, number of chats, and the two log files."""
     try:
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         db_path = os.path.join(BASE_DIR, "ai_history.db")

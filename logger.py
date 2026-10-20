@@ -20,12 +20,15 @@ if not ai_logger.handlers:
     ai_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     ai_logger.addHandler(ai_handler)
 def log_info(message, level="INFO", module="system"):
+    """Write a message to error.log at the given level, tagged with [module]."""
     tagged = f"[{module}] {message}"
     getattr(logger, level.lower())(tagged)
 def ai_log_info(message, level="INFO", module="system"):
+    """Write a message to ai_memory.log at the given level. The module argument is currently ignored; every line is tagged [ai_memory]."""
     tagged = f"[ai_memory] {message}"
     getattr(ai_logger, level.lower())(tagged)
 def log_his(filter_type="all"):
+    """Print error.log to the console, coloured by level. The filter_type argument is unused."""
     if not os.path.exists(LOG_PATH):
         console.print(Text("No log records found", style="yellow"))
         return
@@ -43,6 +46,7 @@ def log_his(filter_type="all"):
             else:
                 console.print(Text(line, style="white"))
 def ai_log_his():
+    """Print ai_memory.log to the console, coloured by level."""
     if not os.path.exists(AI_LOG_PATH):
         console.print(Text("No AI memory logs found", style="yellow"))
         return
@@ -60,6 +64,7 @@ def ai_log_his():
             else:
                 console.print(Text(line, style="white"))
 def clear_log():
+    """Empty error.log. ai_memory.log is not touched."""
     try:
         with open(LOG_PATH, "w", encoding="utf-8"):
             pass
@@ -69,6 +74,7 @@ def clear_log():
         console.print(Text("Failed to clear logs", style="bold red"))
         log_info(f"ERROR : {e}", level="CRITICAL", module="LOG")
 def log_menu():
+    """Interactive log viewer: /all, /ai, /clear, and /exit to leave."""
     console.print(Text("Log viewer — /all, /clear, /ai, /back", style="magenta"))
     while True:
         try:
@@ -79,7 +85,7 @@ def log_menu():
                 clear_log()
             elif cmd == "/ai":
                 ai_log_his()
-            elif cmd == "/back":
+            elif cmd == "/exit":
                 return
             else:
                 console.print(Text("Unknown command. Use /all, /clear, /ai, /back", style="yellow"))
