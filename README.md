@@ -132,6 +132,23 @@ neo-AI/
 └── test_facts.py      # pytest suite
 ```
 
+## Screenshots and Demos
+
+### Demos
+![Neo Chat Demo](demo.gif/-neo_demo)
+
+### Chat
+![Chat](screenshots/chat.png)
+
+### System Status
+![Status](screenshots/status.png)
+
+### Logs
+![Logs](screenshots/logs.png)
+
+### Memory Delete
+![Delete](screenshots/delete.png)
+
 ---
 
 ## Database Schema
