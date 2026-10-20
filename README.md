@@ -135,10 +135,10 @@ neo-AI/
 ## Screenshots and Demos
 
 ### Demos
-![Neo Chat Demo](demo.gif/neo_demo)
+![Neo Chat Demo](demo.gif/neo_demo.gif)
 
-### Chat
-![Chat](screenshots/chat.png)
+### Menu
+![Menu](screenshots/menu.png)
 
 ### System Status
 ![Status](screenshots/status.png)
