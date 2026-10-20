@@ -135,7 +135,7 @@ neo-AI/
 ## Screenshots and Demos
 
 ### Demos
-![Neo Chat Demo](demo.gif/-neo_demo)
+![Neo Chat Demo](demo.gif/neo_demo)
 
 ### Chat
 ![Chat](screenshots/chat.png)
