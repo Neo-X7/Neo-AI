@@ -8,11 +8,11 @@ No cloud. No API keys. Your memory never leaves your machine.
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Ollama](https://img.shields.io/badge/powered%20by-Ollama-black)](https://ollama.com/)
 
-<!-- Re-record on v1.9.5, then replace this comment with the demo GIF:
-![Neo demo](screenshots/neo_demo.gif)
--->
+![Neo demo](demo.gif/neo_demo.gif)
 
 Neo pulls facts out of what you say, decides whether each one is **new**, a **change**, or a **repeat**, and keeps a clean list of what is currently true. Nothing is overwritten: a changed fact is retracted, and the new one is added. Live web search is optional, runs through your own SearXNG container, and is never written into memory.
+
+**How Neo differs:** plain RAG retrieves stored text but never reconciles it, so old and new facts sit side by side. Mem0 also makes add/update/delete decisions, but defaults to hosted LLMs. Neo runs entirely on local models, keeps retracted facts as a non-destructive record, and measures its write gate on a labeled eval set ([results below](#evaluation)).
 
 > Neo runs a local 8B model. It can make mistakes or hallucinate. Don't rely on it for critical decisions.
 
@@ -33,6 +33,16 @@ Neo:  answers from active facts only. Munich never comes back.
 ```
 
 This is the behaviour the [stress test](#stress-test) checks over 65 turns, including after a restart.
+
+### Screenshots
+
+![Menu](screenshots/menu.png)
+
+![Status](screenshots/status.png)
+
+![Logs](screenshots/logs.png)
+
+![Delete](screenshots/delete.png)
 
 ---
 
@@ -111,7 +121,29 @@ Web results are never stored.
 
 ---
 
-## Stress test
+## Evaluation
+
+### Write-gate eval
+
+`gate_eval.json` holds 30 labeled cases (existing facts, a new fact, the expected action). `test_gate.py` runs each case against a fresh SQLite DB and a fresh LanceDB table, through the real `process_fact` path, and reports the correct-action rate.
+
+**Baseline: 22/28 (78.6%)**, single run on `llama3.1` 8B.
+
+- 2 cases are excluded: "Stop remembering my location" and "Ignore that, I never said that". They are commands rather than facts, so the gate has nothing to match them against. Listed under known issues.
+- Cases where retracting is as acceptable as deleting ("quit their job", "sold the laptop", "doesn't like tea anymore") accept either action.
+
+| Category | Correct |
+|---|---|
+| repeat | 4/4 |
+| other_person | 4/4 |
+| job, location, forget, coexist | all correct |
+| fragment | 1/3 |
+| past tense | 0/1 |
+| multi-existing | 0/1 |
+
+Run it with `python test_gate.py` (Ollama must be running). It uses separate test stores (`test_gate.db`, `lance_test/`), so your real memory is untouched.
+
+### Stress test
 
 A 65-turn script (`harder_test_1.py`, then `harder_test_2.py` as a fresh process) feeds Neo 50 facts and 15 chat-only turns, including a location history that ends in Zurich.
 
@@ -125,10 +157,13 @@ A 65-turn script (`harder_test_1.py`, then `harder_test_2.py` as a fresh process
 
 ## Known issues
 
-Full list in [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md).
+Full list in [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md). The first three are measured by the write-gate eval.
 
+- **Fragments can retract unrelated facts.** "I want to work in machine learning in Europe" can split into two facts, and the second can retract the first or an unrelated fact such as your location (2 of 3 eval cases fail).
+- **Past-tense facts retract current ones.** "I used to live in Chennai" can retract "lives in Bengaluru". The decision prompt has no rule for past tense.
+- **Retrieval can miss a related fact.** If the candidate lookup finds nothing at 0.5, the gate defaults to ADD without asking the LLM.
+- **"Forget" commands aren't matched.** "Stop remembering my location" has no content similar to the stored fact, so it never reaches the LLM.
 - **Comparative preferences aren't extracted.** "I like X more than Y" produces no fact.
-- **Some sentences split into fragments.** "I want to work in machine learning in Europe" can become two facts, and the second can retract the first.
 - **The retrieval cutoff is loose at larger fact counts.** It was tuned on 8 facts. At about 50, an unrelated question can pull in a loosely related fact.
 - **Follow-up web searches lose context.** The raw message is the search query.
 - **Quality depends on the model.** Extraction and the gate run on `llama3.1` 8B and can misjudge unusual wording.
@@ -148,9 +183,9 @@ v1.9.5 is a rebuild from v1.8.5, not a patch on v1.9. In testing, v1.9's entity 
 | Embeddings | `all-mpnet-base-v2` (local) | `nomic-embed-text` through Ollama |
 | Web search | SearXNG, Brave or Tavily, classifier, cache | One local SearXNG URL, LLM gate, no cache |
 | Extras | Hardware-aware context sizing, consolidation, backfill | Dropped on purpose |
-| Tests | `tests/test_fixes.py` | `test_facts.py`, 26 tests |
+| Tests | `tests/test_fixes.py` | `test_facts.py` (26 tests), `test_gate.py` (write-gate eval) |
 
-v1.9 reported Recall@4 of 0.94 and MRR of 0.88 on its retrieval eval. v1.9.5 has no equivalent benchmark; its retrieval was tuned and checked with the stress test above.
+v1.9 reported Recall@4 of 0.94 and MRR of 0.88 on its retrieval eval. v1.9.5 has no equivalent retrieval benchmark yet; its retrieval was tuned and checked with the stress test above.
 
 ---
 
@@ -177,7 +212,9 @@ neo-AI/
 ├── config.py          # First-run username setup
 ├── logger.py          # Dual logger (system + memory), log viewer CLI
 ├── file_data.py       # System status checker
-└── test_facts.py      # pytest suite
+├── test_facts.py      # pytest suite
+├── test_gate.py       # Write-gate eval runner
+└── gate_eval.json     # 30 labeled write-gate cases
 ```
 
 <details>
@@ -215,11 +252,16 @@ CREATE TABLE facts (
 | v1.8 | Local LLM via Ollama, LanceDB vector store, semantic memory retrieval |
 | v1.8.5 | Bug fixes across logging, delete logic, embedding guards |
 | v1.9 | Entity memory, three-layer write gate, fusion retrieval, multi-backend web search |
-| **v1.9.5** | Rebuild from v1.8.5: flat facts table, LLM extraction, one-step write gate, distance-cutoff retrieval, on-demand SearXNG search, 26 tests, 65-turn stress test |
+| **v1.9.5** | Rebuild from v1.8.5: flat facts table, LLM extraction, one-step write gate, distance-cutoff retrieval, on-demand SearXNG search, 26 tests, 65-turn stress test, labeled write-gate eval |
 
 ## Project status
 
-v1.9.5 is the final release of this repository. Neo's design assumes a machine that can run `llama3.1` 8B locally, which isn't a realistic baseline for a packaged, download-and-run product, so no further versions are planned here.
+**Active development.** v1.9.5 is a rebuild focused on a validated, measurable memory write gate, and the eval above is the baseline for what comes next:
+
+1. Fix fragment-safe fact extraction, so a split sentence can't retract its own first half.
+2. Add a past-tense rule to the gate prompt.
+3. Detect "forget" intent before the similarity search.
+4. Tune the 0.5 candidate threshold against the eval (0.4 / 0.5 / 0.7) and publish the comparison.
 
 ## Built with Claude
 
