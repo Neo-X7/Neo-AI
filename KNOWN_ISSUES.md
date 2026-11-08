@@ -23,3 +23,11 @@ These limits were found by the 65-turn stress test and by real chat sessions. Th
 ## Logging
 
 - **`ai_log_info` ignores its `module` argument.** Every line in `ai_memory.log` is tagged `[ai_memory]`.
+
+## Unknown target_id on UPDATE/DELETE
+- Fixed: a bad target_id used to fall back to ADD, which could leave contradictory facts active. It now writes nothing and returns PENDING, so the existing fact stays active.
+- process_fact retries decide_action once with a hint and the valid ids. A second bad id stays PENDING.
+- Limit: PENDING facts are only logged, not stored. The new statement is dropped, not queued for later.
+
+## Web search
+- web_results reach chat() empty, so the model says it is offline. Print web_results before chat() and check the /search handler and the search function.

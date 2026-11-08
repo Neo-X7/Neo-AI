@@ -106,11 +106,13 @@ def delete_memory():
         ai_log_info(f"Failed to delete memory: {e}", level="ERROR", module="AI")
 
 def remember_facts(conn, prompt : str)->None:
-    """Extract facts from the prompt and pass each through the write gate. A failure on one fact is logged and does not stop the rest."""
+    """Extract facts from the prompt and pass each through the write gate. A failure on one fact is logged and does not stop the rest. A fact held PENDING is logged as a warning."""
 
     facts=extract_facts(prompt)
     for fact in facts:
         try:
-            process_fact(conn, fact)
+            result=process_fact(conn, fact)
+            if result == "PENDING":
+                ai_log_info(f"fact held pending, not stored: {fact}", level="WARNING", module="MEMORY")
         except Exception as e:
             ai_log_info(f"remember_facts failed on {fact} : {e}",level="ERROR",module="MEMORY")

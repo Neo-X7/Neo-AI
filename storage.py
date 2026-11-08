@@ -133,6 +133,24 @@ def retrieve_similar(query_keywords:str)->list[dict]:
     finally:
         conn.close()
 
+def has_bad_target(decision: dict, candidates: list) -> bool:
+    """Return True if the decision is an UPDATE or DELETE pointing at an unknown fact.
+
+    The target_id is normalized with int() first, so "3" and 3 are treated the same.
+    A missing or non-numeric target_id counts as unknown. ADD and NONE have no target,
+    so they always return False.
+    """
+
+    target_id=decision.get("target_id")
+    action=decision.get("action")
+    try:
+        target_id=int(target_id)
+    except (TypeError,ValueError):
+        target_id=None
+    candidates_id=[c["id"] for c in candidates]
+    if action in ("UPDATE","DELETE") and target_id not in candidates_id:
+        return True
+    return False
 def find_candidate(conn,new_fact_text : str)->list[dict]:
     """Find active facts similar (cosine >= 0.5) to a new fact.
 
@@ -159,12 +177,16 @@ def find_candidate(conn,new_fact_text : str)->list[dict]:
     except Exception as e:
         ai_log_info(f"ERROR : {e}", level="INFO", module="MEMORY")
 
-def apply_decision(conn, new_fact_text, decision : dict, candidates : list[dict])->str:
-    """Carry out the gate's decision (ADD, UPDATE, DELETE or NONE) and return the action applied.
+def apply_decision(conn, new_fact_text, decision: dict, candidates: list[dict]) -> str:
+    """Carry out the gate's decision and return the action applied.
 
-    Unknown actions, and UPDATE or DELETE targets that are not among the candidates, fall
-    back to ADD. An UPDATE onto an identical fact becomes NONE.
+    ADD stores the new fact, UPDATE retracts the target and stores the new fact, DELETE
+    retracts the target, and NONE does nothing. An unknown action falls back to ADD.
+    An UPDATE or DELETE whose target is not among the candidates writes nothing, is
+    logged, and returns PENDING, so the existing active fact stays untouched. An UPDATE
+    onto an identical fact becomes NONE.
     """
+
     action=decision.get("action")
     target_id=decision.get("target_id")
     try:
@@ -172,10 +194,10 @@ def apply_decision(conn, new_fact_text, decision : dict, candidates : list[dict]
     except (TypeError,ValueError):
         target_id=None
     candidate_id=[c["id"] for c in candidates]
-    if action not in ("ADD", "UPDATE", "DELETE", "NONE"):
+    if action not in ("ADD", "UPDATE", "DELETE", "NONE","PENDING"):
         action=("ADD")
     if action in ("UPDATE","DELETE") and target_id not in candidate_id:
-        action=("ADD")
+        action="PENDING"
     if action=="UPDATE":
         target_text = next((c.get("fact_text","")for c in candidates if c["id"] == target_id), "")
         if target_text.strip().lower() == new_fact_text.strip().lower():
@@ -190,12 +212,14 @@ def apply_decision(conn, new_fact_text, decision : dict, candidates : list[dict]
     return action
 
 def process_fact(conn,new_fact_text : str)->str:
-    """Write gate for one fact: find candidates, ask decide_action (plain ADD when there are none), apply the decision, and return the action."""
+    """Write gate for one fact: find candidates, ask decide_action (plain ADD when there are none), retry decide_action once if its target is unknown, apply the decision, and return the action."""
 
     candidates=find_candidate(conn,new_fact_text)
     if not candidates:
         decision={"action" : "ADD", "target_id" : None}
     else:
         decision=decide_action(new_fact_text,candidates)
+        if has_bad_target(decision,candidates):
+            decision=decide_action(new_fact_text,candidates,hint="Your previous target_if was not in the valid ids. Choose again from the valid ids or ADD if nothing matches")
     applied=apply_decision(conn, new_fact_text, decision, candidates)
     return applied

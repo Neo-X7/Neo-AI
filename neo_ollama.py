@@ -53,7 +53,7 @@ def get_embedding(text : str) ->list:
     response=_ollama.embeddings(model="nomic-embed-text",prompt=text)
     return response["embedding"] 
 
-def decide_action(new_fact_text : str, candidates : list[dict])->dict:
+def decide_action(new_fact_text : str, candidates : list[dict],hint : str | None)->dict:
     """Ask llama3.1 whether a new fact should ADD, UPDATE, DELETE or NONE against the candidate facts.
 
     Returns {'action', 'target_id'}. Any error or malformed reply falls back to ADD.
@@ -78,8 +78,10 @@ Rules:
 - target_id must be one of the ids listed. Use null for ADD.
 - If unsure, choose ADD."""
 
-    user_text = f"New fact: {new_fact_text}\n\nExisting facts:\n{candidates_lines}"  
-
+    valid_ids=", ".join(str(r["id"]) for r in candidates)
+    user_text = f"New fact: {new_fact_text}\n\nExisting facts:\n{candidates_lines}\n\nValid ids: {valid_ids}. Use null if none apply."
+    if hint:
+        user_text += f"\n\n{hint}"
     messages = [
     {"role": "system", "content": system_text},
     {"role": "user", "content": user_text},

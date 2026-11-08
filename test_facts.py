@@ -279,7 +279,7 @@ def test_gate_unknown_target_id(monkeypatch,tmp_path):
     monkeypatch.setattr(storage, "get_embedding", fake_embedding)
     monkeypatch.setattr(storage, "insert_vector", fake_insert)
     def find_candidate(conn, new_text_fact): return rows
-    def decide_action(new_text_fact, candidates): return {"action" : "UPDATE", "target_id" : 999}
+    def decide_action(new_text_fact, candidates,hint=None): return {"action" : "UPDATE", "target_id" : 999}
     monkeypatch.setattr(storage, "find_candidate", find_candidate)
     monkeypatch.setattr(storage, "decide_action", decide_action)
     with get_db() as conn:
@@ -288,7 +288,7 @@ def test_gate_unknown_target_id(monkeypatch,tmp_path):
         new_fact="I love to drink filtered coffee"
         fact=process_fact(conn,new_fact)
         after=list_active_facts(conn)
-        assert fact=="ADD"
+        assert fact=="PENDING"
         len(after)==2
         texts=[r["fact_text"]for r in after]
         print(texts)
@@ -478,3 +478,83 @@ def test_chat_without_web_results_stays_offline(monkeypatch):
     system_text = saved[0][0]["content"]
     assert "Web results" not in system_text
     assert "offline" in system_text
+
+def test_gate_unknown_target_id_stays_pending(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path / "test.db"))
+    calls = []
+    def fake_embedding(text): return [0.1, 0.2, 0.3]
+    def fake_insert(embedding_id, vector): calls.append(embedding_id)
+    monkeypatch.setattr(storage, "get_embedding", fake_embedding)
+    monkeypatch.setattr(storage, "insert_vector", fake_insert)
+
+    def find_candidate(conn, new_fact_text): return rows
+    def decide_action(new_fact_text, candidates,hint=None):
+        return {"action": "UPDATE", "target_id": 999}
+    monkeypatch.setattr(storage, "find_candidate", find_candidate)
+    monkeypatch.setattr(storage, "decide_action", decide_action)
+
+    with get_db() as conn:
+        add_fact(conn, "I like chess")
+        rows = list_active_facts(conn)
+        result = process_fact(conn, "I stopped liking chess")
+        after = list_active_facts(conn)
+        texts = [r["fact_text"] for r in after]
+
+        assert result == "PENDING"
+        assert len(after) == 1
+        assert texts == ["I like chess"]
+
+def test_gate_retry_fixes_bad_target_id(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path / "test.db"))
+    def fake_embedding(text): return [0.1, 0.2, 0.3]
+    def fake_insert(embedding_id, vector): pass
+    monkeypatch.setattr(storage, "get_embedding", fake_embedding)
+    monkeypatch.setattr(storage, "insert_vector", fake_insert)
+
+    def find_candidate(conn, new_fact_text): return rows
+    monkeypatch.setattr(storage, "find_candidate", find_candidate)
+
+    decide_calls = []
+    def decide_action(new_fact_text, candidates,hint=None):
+        decide_calls.append(1)
+        if len(decide_calls) == 1:
+            return {"action": "UPDATE", "target_id": 999}
+        return {"action": "UPDATE", "target_id": seed_id}
+    monkeypatch.setattr(storage, "decide_action", decide_action)
+
+    with get_db() as conn:
+        seed_id = add_fact(conn, "I like chess")
+        rows = list_active_facts(conn)
+        result = process_fact(conn, "I stopped liking chess")
+        texts = [r["fact_text"] for r in list_active_facts(conn)]
+
+        assert result == "UPDATE"
+        assert len(decide_calls) == 2
+        assert texts == ["I stopped liking chess"]
+
+
+def test_gate_retry_still_bad_stays_pending(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path / "test.db"))
+    def fake_embedding(text): return [0.1, 0.2, 0.3]
+    def fake_insert(embedding_id, vector): pass
+    monkeypatch.setattr(storage, "get_embedding", fake_embedding)
+    monkeypatch.setattr(storage, "insert_vector", fake_insert)
+
+    def find_candidate(conn, new_fact_text): return rows
+    monkeypatch.setattr(storage, "find_candidate", find_candidate)
+
+    decide_calls = []
+    def decide_action(new_fact_text, candidates,hint=None):
+        decide_calls.append(1)
+        return {"action": "UPDATE", "target_id": 999}
+    monkeypatch.setattr(storage, "decide_action", decide_action)
+
+    with get_db() as conn:
+        add_fact(conn, "I like chess")
+        rows = list_active_facts(conn)
+        result = process_fact(conn, "I stopped liking chess")
+        texts = [r["fact_text"] for r in list_active_facts(conn)]
+
+        assert result == "PENDING"
+        assert len(decide_calls) == 2
+        assert texts == ["I like chess"]
