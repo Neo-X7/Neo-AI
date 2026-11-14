@@ -4,7 +4,7 @@ import yake
 from logger import log_info,ai_log_info
 import uuid
 from lancedb_store import insert_vector,search_with_scores
-from neo_ollama import get_embedding,decide_action
+from neo_ollama import get_embedding,decide_action,same_subject
 from typing import Generator
 from contextlib import contextmanager
 import os
@@ -133,7 +133,7 @@ def retrieve_similar(query_keywords:str)->list[dict]:
     finally:
         conn.close()
 
-def has_bad_target(decision: dict, candidates: list) -> bool:
+def has_bad_target(new_fact_text : str,decision: dict, candidates: list) -> bool:
     """Return True if the decision is an UPDATE or DELETE pointing at an unknown fact.
 
     The target_id is normalized with int() first, so "3" and 3 are treated the same.
@@ -219,7 +219,14 @@ def process_fact(conn,new_fact_text : str)->str:
         decision={"action" : "ADD", "target_id" : None}
     else:
         decision=decide_action(new_fact_text,candidates)
-        if has_bad_target(decision,candidates):
+        if has_bad_target(new_fact_text,decision,candidates):
             decision=decide_action(new_fact_text,candidates,hint="Your previous target_if was not in the valid ids. Choose again from the valid ids or ADD if nothing matches")
     applied=apply_decision(conn, new_fact_text, decision, candidates)
     return applied
+def has_bad_target(new_fact_text, decision, candidates):
+    if decision["action"] not in ("UPDATE", "DELETE"):
+        return False
+    target = next((c for c in candidates if c["id"] == decision["target_id"]), None)
+    if target is None:
+        return True
+    return not same_subject(new_fact_text, target.get("fact_text",""))

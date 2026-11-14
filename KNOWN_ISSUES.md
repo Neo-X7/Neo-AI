@@ -31,3 +31,6 @@ These limits were found by the 65-turn stress test and by real chat sessions. Th
 
 ## Web search
 - web_results reach chat() empty, so the model says it is offline. Print web_results before chat() and check the /search handler and the search function.
+
+## Valid but wrong target ID.
+- If the model returns an UPDATE or DELETE whose target_id is a real candidate but belongs to an unrelated fact, the gate applies it. Unknown IDs are caught (PENDING + one retry), but a wrong valid ID is not. A semantic check (same_subject) was tried and rejected: on llama3.1:8b it returns False for legitimate corrections like “I stopped liking chess” vs “I like chess”, which would block valid updates. Likely fixable with a stronger model or a label-comparison check.

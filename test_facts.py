@@ -558,3 +558,73 @@ def test_gate_retry_still_bad_stays_pending(monkeypatch, tmp_path):
         assert result == "PENDING"
         assert len(decide_calls) == 2
         assert texts == ["I like chess"]
+
+def test_update_valid_id_wrong_fact_stays_pending(monkeypatch, tmp_path):
+    monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path / "test.db"))
+    def fake_embedding(text): return [0.1, 0.2, 0.3]
+    def fake_insert(embedding_id, vector): pass
+    monkeypatch.setattr(storage, "get_embedding", fake_embedding)
+    monkeypatch.setattr(storage, "insert_vector", fake_insert)
+    monkeypatch.setattr(storage, "same_subject", lambda new, target: "chess" in target.lower())
+
+    def find_candidate(conn, new_fact_text): return rows
+    monkeypatch.setattr(storage, "find_candidate", find_candidate)
+
+    decide_calls = []
+    def decide_action(new_fact_text, candidates, hint=None):
+        decide_calls.append(1)
+        return {"action": "UPDATE", "target_id": city_id}
+    monkeypatch.setattr(storage, "decide_action", decide_action)
+
+    with get_db() as conn:
+        add_fact(conn, "I like chess")
+        add_fact(conn, "I live in Bengaluru")
+        rows = list_active_facts(conn)
+        city_id = [r["id"] for r in rows if r["fact_text"] == "I live in Bengaluru"][0]
+
+        result = process_fact(conn, "I stopped liking chess")
+        texts = sorted(r["fact_text"] for r in list_active_facts(conn))
+
+        assert result == "PENDING"
+        assert texts == ["I like chess", "I live in Bengaluru"]
+@pytest.fixture(autouse=True)
+def fake_same_subject(monkeypatch,tmp_path):
+    monkeypatch.setattr(storage, "same_subject", lambda new, target: True)
+
+@pytest.mark.xfail(reason="wrong valid target_id not caught, see KNOWN_ISSUES.md")
+def test_update_valid_id_wrong_fact_stays_pending(monkeypatch, tmp_path):
+
+    monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path/"test.db"))
+    def fake_embedding(text): return [0.1,0.2,0.3]
+    def fake_insert(embedding_id, vector): pass
+    monkeypatch.setattr(storage, "get_embedding", fake_embedding)
+    monkeypatch.setattr(storage, "insert_vector", fake_insert)
+
+    with get_db() as conn:
+        add_fact(conn, "I like chess")
+        add_fact(conn, "I live in Zurich")
+
+    with get_db() as conn:
+        rows = list_active_facts(conn)
+    id_a = rows[0]["id"]
+    id_b = rows[1]["id"]
+
+    candidates = [
+        {"id": id_a, "fact_text": "I like chess"},
+        {"id": id_b, "fact_text": "I live in Zurich"},
+    ]
+    def fake_find_candidate(conn, text): return candidates
+    def fake_decide_action(new_fact_text, candidates, hint=None):
+        return {"action": "UPDATE", "target_id": id_b}
+    monkeypatch.setattr(storage, "find_candidate", fake_find_candidate)
+    monkeypatch.setattr(storage, "decide_action", fake_decide_action)
+
+    with get_db() as conn:
+        result = process_fact(conn, "I stopped liking chess")
+
+    with get_db() as conn:
+        rows = list_active_facts(conn)
+
+    assert result == "PENDING"
+    assert len(rows) == 2
+    assert [row["fact_text"] for row in rows] == ["I like chess", "I live in Zurich"]                 

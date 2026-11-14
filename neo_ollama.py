@@ -179,3 +179,24 @@ or
         return result.get("search") is True
     except Exception:
         return False
+
+def same_subject(new_fact_text, target_text)->bool:
+    """Returns True if both the fact are about the same subject"""
+    prompt = (
+        "Do these two facts describe the same attribute of the same person? "
+        "A change to one would make the other outdated or contradictory.\n"
+        f"Fact A: {target_text}\n"
+        f"Fact B: {new_fact_text}\n"
+        'Reply only with JSON: {"same": true} or {"same": false}'
+    )
+    try:
+        reply = _ollama.chat(
+            model="llama3.1",
+            messages=[{"role": "user", "content": prompt}],
+            format="json",
+            options={"temperature": 0},
+        )
+        data = json.loads(reply["message"]["content"])
+        return data.get("same") is True
+    except Exception:
+        return False

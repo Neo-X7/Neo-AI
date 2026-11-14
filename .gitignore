@@ -231,3 +231,8 @@ __marimo__/
 facts.db
 scratch*.py
 peek.py
+lance_test/
+*.ipynb
+names.txt
+*:Zone.Identifier
+*.db
