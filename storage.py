@@ -82,7 +82,7 @@ def extract_keywords(text : str)->str:
         keywords = kw_extractor.extract_keywords(text)
     return ", ".join([kw for kw, _ in keywords])
 
-def save_message(conn, prompt : str, response : str)-> str:
+def save_message(conn, prompt : str, response : str)-> None:
     """Store a prompt/response pair in ai_history with its keywords, and embed the keywords. Returns nothing."""
     timestamp = datetime.now().isoformat()
     embedding_id = str(uuid.uuid4())
@@ -129,7 +129,7 @@ def retrieve_similar(query_keywords:str)->list[dict]:
         for eid in embedding_ids:
             if eid in lookup:
                 results.append({"fact_text":lookup[eid]})
-        return results
+        return results[:5]
     finally:
         conn.close()
 
@@ -189,6 +189,8 @@ def apply_decision(conn, new_fact_text, decision: dict, candidates: list[dict]) 
 
     action=decision.get("action")
     target_id=decision.get("target_id")
+    if has_bad_target(new_fact_text, decision, candidates):
+        return "PENDING"
     try:
         target_id=int(target_id)
     except (TypeError,ValueError):
@@ -220,13 +222,18 @@ def process_fact(conn,new_fact_text : str)->str:
     else:
         decision=decide_action(new_fact_text,candidates)
         if has_bad_target(new_fact_text,decision,candidates):
-            decision=decide_action(new_fact_text,candidates,hint="Your previous target_if was not in the valid ids. Choose again from the valid ids or ADD if nothing matches")
+            decision=decide_action(new_fact_text,candidates,hint="Your previous target_id was not in the valid ids. Choose again from the valid ids or ADD if nothing matches")
     applied=apply_decision(conn, new_fact_text, decision, candidates)
     return applied
-def has_bad_target(new_fact_text, decision, candidates):
-    if decision["action"] not in ("UPDATE", "DELETE"):
+def has_bad_target(new_fact_text: str, decision: dict, candidates: list) -> bool:
+    """Return True if an UPDATE/DELETE targets an unknown id or an unrelated fact."""
+    if decision.get("action") not in ("UPDATE", "DELETE"):
         return False
-    target = next((c for c in candidates if c["id"] == decision["target_id"]), None)
+    target = next(
+        (c for c in candidates if str(c["id"]) == str(decision.get("target_id"))),
+        None,
+    )
     if target is None:
         return True
-    return not same_subject(new_fact_text, target.get("fact_text",""))
+    result = same_subject(new_fact_text, target.get("fact_text", ""))
+    return not result

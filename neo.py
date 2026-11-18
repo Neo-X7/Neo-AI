@@ -16,7 +16,7 @@ def ai_history_read()->list:
     with get_db() as conn:
         cursor=conn.execute("""select prompt,response,timestamp from ai_history order by timestamp desc limit 5""")
         rows=cursor.fetchmany(5)
-        return [dict(row) for row in rows] if rows else []
+        return [dict(row) for row in reversed(rows)] if rows else []
 def ask_neo()->None:
     """Run the interactive chat loop until the user types /exit.
 
@@ -61,12 +61,15 @@ def ask_neo()->None:
             similar=retrieve_similar(chat_prompt)
             response = chat(username, chat_prompt,history,similar,web)
             console.print(Text(response, style="cyan"))
+            pending=[]
             with get_db() as conn:
                 save_message(conn,chat_prompt,response)
                 if not searched:
-                    remember_facts(conn, prompt)
+                    pending=remember_facts(conn, prompt)
+            if pending:
+                console.pritn(Text(f"[Memory] Held for clarification(existing memories unchanged):{','.join(pending)}",style="yellow"))
         except Exception as e:
-            print("An Error occured while replaying and memory storage")
+            print("An Error occured while replying and memory storage")
             ai_log_info(f" ERROR : {e}", level="ERROR",module="MEMORY")
 def delete_memory():
     """Delete all memory (ai_history, facts and every vector) after two yes/no confirmations."""
@@ -105,14 +108,16 @@ def delete_memory():
         console.print(Text("Failed to delete memory", style="bold red"))
         ai_log_info(f"Failed to delete memory: {e}", level="ERROR", module="AI")
 
-def remember_facts(conn, prompt : str)->None:
+def remember_facts(conn, prompt : str)->list[str]:
     """Extract facts from the prompt and pass each through the write gate. A failure on one fact is logged and does not stop the rest. A fact held PENDING is logged as a warning."""
-
+    pending=[]
     facts=extract_facts(prompt)
     for fact in facts:
         try:
             result=process_fact(conn, fact)
             if result == "PENDING":
-                ai_log_info(f"fact held pending, not stored: {fact}", level="WARNING", module="MEMORY")
+                pending.append(fact)
+                ai_log_info(f"Fact held PENDING: {fact}",level="WARNING",module="MEMORY")
         except Exception as e:
             ai_log_info(f"remember_facts failed on {fact} : {e}",level="ERROR",module="MEMORY")
+    return pending

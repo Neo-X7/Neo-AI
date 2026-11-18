@@ -74,7 +74,7 @@ def main():
                 console.print(Text(f"Unknown command '{cmd}'. Type /help to see available commands.", style="yellow"))
                 log_info(f"Unknown command: {cmd}", level="WARNING", module="MAIN")
         except KeyboardInterrupt:
-            console.print(Text("\nUse /quit to exit.", style="yellow"))
+            console.print(Text("\nUse /exit to exit.", style="yellow"))
         except Exception as e:
             console.print(Text("An error occurred.", style="bold red"))
             log_info(f"ERROR: {e}", level="ERROR", module="MAIN")

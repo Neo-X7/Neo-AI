@@ -53,7 +53,7 @@ def get_embedding(text : str) ->list:
     response=_ollama.embeddings(model="nomic-embed-text",prompt=text)
     return response["embedding"] 
 
-def decide_action(new_fact_text : str, candidates : list[dict],hint : str | None)->dict:
+def decide_action(new_fact_text : str, candidates : list[dict],hint : str | None=None)->dict:
     """Ask llama3.1 whether a new fact should ADD, UPDATE, DELETE or NONE against the candidate facts.
 
     Returns {'action', 'target_id'}. Any error or malformed reply falls back to ADD.
@@ -180,11 +180,16 @@ or
     except Exception:
         return False
 
-def same_subject(new_fact_text, target_text)->bool:
-    """Returns True if both the fact are about the same subject"""
+def same_subject(new_fact_text : str, target_text : str)->bool:
+    """Return True if both facts refer to the same topic/attribute of the same person."""
     prompt = (
-        "Do these two facts describe the same attribute of the same person? "
-        "A change to one would make the other outdated or contradictory.\n"
+        "Do Fact A and Fact B refer to the same topic, preference, or attribute of the same person "
+        "(so Fact B updates, reverses, or replaces Fact A)?\n\n"
+        "Examples:\n"
+        '- Fact A: "I like chess" | Fact B: "I stopped liking chess" -> {"same": true}\n'
+        '- Fact A: "I live in Bengaluru" | Fact B: "I moved to Pune" -> {"same": true}\n'
+        '- Fact A: "I live in Bengaluru" | Fact B: "I stopped liking chess" -> {"same": false}\n'
+        '- Fact A: "My sister lives in Delhi" | Fact B: "I moved to Pune" -> {"same": false}\n\n'
         f"Fact A: {target_text}\n"
         f"Fact B: {new_fact_text}\n"
         'Reply only with JSON: {"same": true} or {"same": false}'

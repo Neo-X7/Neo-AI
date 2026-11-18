@@ -166,7 +166,7 @@ def test_candidate_update_gate(monkeypatch,tmp_path):
         assert len(after)==1
         assert len(calls)==2
 
-def test_candidate_delete_gate(monkeypatch,tmp_path):
+def test_candidate_delete_gate_one(monkeypatch,tmp_path):
     
     monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path/"test.db"))
     calls=[]
@@ -186,7 +186,7 @@ def test_candidate_delete_gate(monkeypatch,tmp_path):
         assert result=="DELETE"
         assert len(calls)==1
 
-def test_candidate_delete_gate(monkeypatch,tmp_path):
+def test_candidate_delete_gate_two(monkeypatch,tmp_path):
     
     monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path/"test.db"))
     calls=[]
@@ -207,7 +207,7 @@ def test_candidate_delete_gate(monkeypatch,tmp_path):
         assert len(calls)==1
         assert len(after)==0
 
-def test_candidate_none_gate(monkeypatch,tmp_path):
+def test_candidate_none_gate_one(monkeypatch,tmp_path):
     
     monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path/"test.db"))
     calls=[]
@@ -227,7 +227,7 @@ def test_candidate_none_gate(monkeypatch,tmp_path):
         assert result=="DELETE"
         assert len(calls)==1
 
-def test_candidate_none_gate(monkeypatch,tmp_path):
+def test_candidate_none_gate_two(monkeypatch,tmp_path):
     
     monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path/"test.db"))
     calls=[]
@@ -258,7 +258,7 @@ def test_gate_string_target_id(monkeypatch,tmp_path):
     monkeypatch.setattr(storage, "get_embedding", fake_embedding)
     monkeypatch.setattr(storage, "insert_vector", fake_insert)
     def find_candidate(conn, new_text_fact): return rows
-    def decide_action(new_text_fact, candidates): return {"action" : "UPDATE", "target_id" : str(seed_id)}
+    def decide_action(new_text_fact, candidates,hint=None): return {"action" : "UPDATE", "target_id" : str(seed_id)}
     monkeypatch.setattr(storage, "find_candidate", find_candidate)
     monkeypatch.setattr(storage, "decide_action", decide_action)
     with get_db() as conn:
@@ -566,7 +566,7 @@ def test_update_valid_id_wrong_fact_stays_pending(monkeypatch, tmp_path):
     monkeypatch.setattr(storage, "get_embedding", fake_embedding)
     monkeypatch.setattr(storage, "insert_vector", fake_insert)
     monkeypatch.setattr(storage, "same_subject", lambda new, target: "chess" in target.lower())
-
+    print("CHECK", storage.same_subject("x", "I live in Bengaluru"))
     def find_candidate(conn, new_fact_text): return rows
     monkeypatch.setattr(storage, "find_candidate", find_candidate)
 
@@ -591,8 +591,8 @@ def test_update_valid_id_wrong_fact_stays_pending(monkeypatch, tmp_path):
 def fake_same_subject(monkeypatch,tmp_path):
     monkeypatch.setattr(storage, "same_subject", lambda new, target: True)
 
-@pytest.mark.xfail(reason="wrong valid target_id not caught, see KNOWN_ISSUES.md")
-def test_update_valid_id_wrong_fact_stays_pending(monkeypatch, tmp_path):
+@pytest.mark.xfail(reason="wrong valid target_id not caught, see KNOWN_ISSUES.md",strict=True)
+def test_update_valid_id_wrong_fact_stays(monkeypatch, tmp_path):
 
     monkeypatch.setattr(storage, "_DB_PATH", str(tmp_path/"test.db"))
     def fake_embedding(text): return [0.1,0.2,0.3]
