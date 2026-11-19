@@ -153,6 +153,20 @@ A 65-turn script (`harder_test_1.py`, then `harder_test_2.py` as a fresh process
 - None of the 15 chat-only turns created a fact.
 - No retracted fact came back through retrieval, including after a restart.
 
+### Retrieval eval
+
+`eval_neo.py` seeds 10 facts into an isolated temporary SQLite + LanceDB store, queries `retrieve_similar` with 10 paraphrased prompts, and checks retracted-fact leakage after updates/deletes (`nomic-embed-text` + `llama3.1` 8B).
+
+| Metric | Result |
+|---|---|
+| Recall@1 | 0.70 (7/10) |
+| Recall@3 | 0.80 (8/10) |
+| Recall@5 | 0.80 (8/10) |
+| MRR | 0.75 |
+| Avg retrieval latency | 30.1 ms |
+| Write-gate smoke cases | 5/5 (100%) |
+| Retracted-fact leakage | 0/3 |
+
 ---
 
 ## Known issues
@@ -185,7 +199,7 @@ v1.9.5 is a rebuild from v1.8.5, not a patch on v1.9. In testing, v1.9's entity 
 | Extras | Hardware-aware context sizing, consolidation, backfill | Dropped on purpose |
 | Tests | `tests/test_fixes.py` | `test_facts.py` (26 tests), `test_gate.py` (write-gate eval) |
 
-v1.9 reported Recall@4 of 0.94 and MRR of 0.88 on its retrieval eval. v1.9.5 has no equivalent retrieval benchmark yet; its retrieval was tuned and checked with the stress test above.
+v1.9 reported Recall@4 of 0.94 and MRR of 0.88 on its retrieval eval. v1.9 reported Recall@4 of 0.94 and MRR of 0.88 on its retrieval eval. v1.9.5 measures Recall@5 of 0.80 and MRR of 0.75 on `eval_neo.py` (10 queries, `30.1 ms` avg) with 0/3 retracted-fact leakage, alongside the 65-turn stress test above.
 
 ---
 
